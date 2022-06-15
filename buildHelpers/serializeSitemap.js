@@ -34,7 +34,11 @@ const checkIsBlogPostRegex = /blog\/.+/;
 const serializeLocale = (locale) => {
   return ({ site, allSitePage }) => {
     const { edges } = allSitePage;
-    const pages = edges.map(({ node }) => getPathInfo(node));
+    const pages = edges
+      .map(({ node }) => getPathInfo(node))
+      // Technically "/api" doesn't have any content, it's just a filler page for
+      // other content to live on. Strip it from the sitemap.
+      .filter(({ originalPath }) => originalPath !== "/api/");
     const byPath = groupBy(pages, "path");
     const pagesWithAlternates = Object.values(byPath).reduce(
       (accum, pageVersions) => {
@@ -70,6 +74,7 @@ const serializeLocale = (locale) => {
         // so highlighting them in the sitemap isn't what we want.
         url:
           site.siteMetadata.siteUrl + main.originalPath.replace("no-js/", ""),
+        lastmod: main.context.lastModified,
         links: alternates.map((a) => ({
           lang: a.locale,
           url: site.siteMetadata.siteUrl + a.originalPath,
@@ -90,6 +95,9 @@ const query = `
     edges {
       node {
         path
+        context {
+          lastModified
+        }
       }
     }
   }

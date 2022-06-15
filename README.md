@@ -2,6 +2,8 @@
 
 # Contents
 
+- [Stellar Documentation and API Reference](#stellar-documentation-and-api-reference)
+- [Contents](#contents)
 - [How to Run](#how-to-run)
   - [Dependencies](#dependencies)
   - [Local Development](#local-development)
@@ -18,14 +20,17 @@
     - [Quote](#quote)
     - [Paragraph and Headings](#paragraph-and-headings)
   - [Custom Components](#custom-components)
-    - [`<AttributeTable/>`](#attributetable)
-    - [`<Alert/>`](#alert)
-    - [`<CodeExample/>`](#codeexample)
-    - [`<Endpoint/>`](#endpoint)
-    - [`<EndpointsTable/>`](#endpointstable)
-    - [`<ExampleResponse/>`](#example-json-response)
-    - [`<NavTable/>`](#navtable)
+    - [AttributeTable](#attributetable)
+      - [Omitting Data Type](#omitting-data-type)
+    - [Alert](#alert)
+    - [CodeExample](#codeexample)
+    - [Endpoint](#endpoint)
+    - [EndpointsTable](#endpointstable)
+    - [Example (JSON) Response](#example-json-response)
+    - [MethodTable](#methodtable)
     - [Diagrams (Mermaid)](#diagrams-mermaid)
+    - [Performance metrics](#performance-metrics)
+    - [Testing requests as a crawler](#testing-requests-as-a-crawler)
 
 # How to Run
 
@@ -33,9 +38,19 @@
 
 To build this project, you must have the following dependencies installed:
 
-- `node 10.16.3`
-  - The latest node version may not be compatible with the "sharp" module
+- A modern version of node. We recommend the current LTS.
+  - We have some binary dependencies, `sharp` for image processing and
+    `puppeteer` to render Mermaid charts, which are both somewhat flaky. It's
+    possible that one of these will ship a change that mandates a more modern
+    version in the future.
 - `yarn`
+- If your local build environment is arm64, such as on newer Apple M1 Macs, then
+  use brew to pre-install libvips which is a native `sharp` dependency and needs
+  to be the arm64 version, it wasn't getting resolved to correct arch/platform
+  version through yarn install alone: `brew install vips`
+
+Some of the dependencies are considered "legacy", so run
+`npm install --legacy-peer-deps` to bypass errors.
 
 ## Local Development
 
@@ -53,6 +68,9 @@ yarn production
 yarn prod:build
 yarn prod:serve
 ```
+
+To run a complete simulation of a production build, make sure to set an
+`AMPLITUDE_KEY` environment variable.
 
 # Structure
 
@@ -228,7 +246,7 @@ Beyond defining title font sizes, line heights, and weights:
 - **H1** tags are reserved for the page’s title and should not be used; that
   said, if they are used, they will still show up on the front end as H1 tags
 - **H2** tags populate the ride-side page
-  [table of contents](https://developers.stellar.org/docs/enabling-deposit-and-withdrawal/setting-up-test-server/)
+  [table of contents](https://developers.stellar.org/docs/anchoring-assets/enabling-deposit-and-withdrawal/setting-up-test-server/)
   in Documentation
 
 ## Custom Components
@@ -334,7 +352,7 @@ Example: `<AttributeTable/>` with type specified on
   - `children` (required)
 
 For example,
-[Setting Up Test Server](https://developers.stellar.org/docs/enabling-deposit-and-withdrawal/setting-up-test-server/)
+[Setting Up Test Server](https://developers.stellar.org/docs/anchoring-assets/enabling-deposit-and-withdrawal/setting-up-test-server/)
 
 ```
 import { Alert } from "components/Alert";
@@ -361,7 +379,7 @@ than one language. See an example of including a snippet for `curl` and
   - `href` (optional)
 
 For example,
-[Setting Up Test Server](https://developers.stellar.org/docs/enabling-deposit-and-withdrawal/setting-up-test-server/)
+[Setting Up Test Server](https://developers.stellar.org/docs/anchoring-assets/enabling-deposit-and-withdrawal/setting-up-test-server/)
 in Documentation and
 [Resources > Transaction > Retrieve a Transaction](https://developers.stellar.org/api/resources/transactions/single/)
 in API Reference.
@@ -509,11 +527,11 @@ import { ExampleResponse } from "components/ExampleResponse";
 </ExampleResponse>
 ````
 
-### NavTable
+### MethodTable
 
-<img src="./readme-imgs/navtable.png" alt="NavTable Component" width="389"/>
+<img src="./readme-imgs/MethodTable.png" alt="MethodTable Component" width="389"/>
 
-`<NavTable/>` is used to display navigation sections and its description.
+`<MethodTable/>` is used to display navigation sections and its description.
 
 - PropTypes
   - `title` (required)
@@ -522,9 +540,9 @@ import { ExampleResponse } from "components/ExampleResponse";
 For example, [Introduction](https://developers.stellar.org/api/introduction/).
 
 ```
-import { NavTable } from "components/NavTable";
+import { MethodTable } from "components/MethodTable";
 
-<NavTable title="API Reference Sections">
+<MethodTable title="API Reference Sections">
 
 |  |  |
 | --- | --- |
@@ -533,7 +551,7 @@ import { NavTable } from "components/NavTable";
 | [Aggregations](../aggregations/index.mdx) | Descriptions of specialized endpoints. |
 | [Errors](../errors/index.mdx) | Potential errors and what they mean. |
 
-</NavTable>
+</MethodTable>
 ```
 
 ### Diagrams (Mermaid)
@@ -565,3 +583,21 @@ sequenceDiagram
       Note over A: Deposit
 ```
 ````
+
+### Performance metrics
+
+We have support for simple, anonymous metrics, emitted to Amplitude via
+`helpers/metrics.js`.
+
+We also have a simple performance tracking system, `helpers/performance.js`.
+`mark(string)` will begin measuring, and `measure(string)` will stop measuring
+and return timing information—an object with a `duration` and
+`hasHighPrecision`. Some browsers don't expose the high-precision APIs, and we
+definitely want to know if they're used (especially if not usable). Make sure to
+use a `constants/performanceMarks` constant, not just a raw string.
+
+### Testing requests as a crawler
+
+Chrome allows you to
+[override the user agent](https://developers.google.com/web/tools/chrome-devtools/device-mode/override-user-agent)
+with DevTools, which enables us to test how Google will see pages.

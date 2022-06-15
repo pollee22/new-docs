@@ -3,10 +3,7 @@ import PropTypes from "prop-types";
 import styled from "styled-components";
 import Helmet from "react-helmet";
 
-import { FONTS } from "constants/fonts";
-
 import { BasicLink } from "basics/Links";
-
 import { Seo } from "./Seo";
 
 const contentId = "content";
@@ -31,20 +28,25 @@ const SkipToContentEl = styled(BasicLink).attrs({
 `;
 
 export const LayoutBase = ({
-  pageContext,
+  path,
   title,
   description = "",
   previewImage,
   children,
   viewport = "width=device-width, initial-scale=1",
+  omitSeoHeadersPredicate,
+  seo = {},
 }) => (
   <>
     <Helmet
-      link={FONTS.filter((font) => font.preload).flatMap((font) => ({
-        rel: "preload",
-        href: font.src[0].url,
-        as: "font",
-      }))}
+      link={[
+        { rel: "stylesheet", type: "text/css", href: "/fonts.css" },
+        {
+          rel: "stylesheet",
+          type: "text/css",
+          href: "/docsearch-stellar.css",
+        },
+      ]}
       meta={[
         {
           name: "viewport",
@@ -56,7 +58,10 @@ export const LayoutBase = ({
       title={title}
       description={description}
       previewImage={previewImage}
-      path={pageContext.urlPath}
+      path={path}
+      omitPredicate={omitSeoHeadersPredicate}
+      link={seo.link}
+      meta={seo.meta}
     />
     <SkipToContentEl />
     <ContentEl>{children}</ContentEl>
@@ -69,8 +74,10 @@ LayoutBase.propTypes = {
   previewImage: PropTypes.string,
   viewport: PropTypes.string,
   description: PropTypes.node,
-  pageContext: PropTypes.shape({
-    locale: PropTypes.string.isRequired,
-    urlPath: PropTypes.string.isRequired,
-  }).isRequired,
+  path: PropTypes.string.isRequired,
+  omitSeoHeadersPredicate: PropTypes.func,
+  seo: PropTypes.shape({
+    link: PropTypes.array,
+    meta: PropTypes.array,
+  }),
 };

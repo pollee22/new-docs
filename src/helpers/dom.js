@@ -1,16 +1,16 @@
-import { TweenLite } from "gsap/TweenLite";
+import gsap from "gsap";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
 
 // We have to include this so that Webpack doesn't tree-shake the plugin out of
 // the production bundle.
-// eslint-disable-next-line
-const scrollPlugin = ScrollToPlugin;
+gsap.registerPlugin(ScrollToPlugin);
 
 export const smoothScrollTo = (node, options = {}, onCompleteFn) => {
   const offset = 0;
   const { duration = 0.55 } = options;
 
-  TweenLite.to(window, duration, {
+  gsap.to(window, {
+    duration,
     scrollTo: {
       y: node.offsetTop + offset,
     },
@@ -50,4 +50,16 @@ export const findActiveNode = (possibleNodes, isScrollingDown) => {
 
     return bottom > topEdge && bottom < window.innerHeight;
   });
+};
+
+export const isInViewport = (elem) => {
+  const bounding = elem.getBoundingClientRect();
+  return (
+    bounding.top >= 0 &&
+    bounding.left >= 0 &&
+    bounding.bottom <=
+      (window.innerHeight || document.documentElement.clientHeight) &&
+    bounding.right <=
+      (window.innerWidth || document.documentElement.clientWidth)
+  );
 };

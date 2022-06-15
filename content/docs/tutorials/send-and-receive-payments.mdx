@@ -4,6 +4,7 @@ order: 20
 ---
 
 import { CodeExample } from "components/CodeExample";
+import { Alert } from "components/Alert";
 
 Most of the time, you’ll be sending money to someone else who has their own account. For this tutorial, however, you'll need a second account to transact with. So before proceeding, follow the steps outlined in [Create an Account](./create-account.mdx) to make _two_ accounts: one for sending and one for receiving.
 
@@ -14,6 +15,13 @@ Actions that do things on Stellar — like sending payments or making buy or sel
 Transactions are atomic, meaning that if any operation in a transaction fails, they all fail. Let’s say you have 100 lumens and you make two payment operations of 60 lumens each. If you make two transactions (each with one operation), the first will succeed and the second will fail because you don’t have enough lumens. You’ll be left with 40 lumens. However, if you group the two payments into a single transaction, they will both fail and you’ll be left with the full 100 lumens still in your account.
 
 Every transaction also incurs a small fee. Like the minimum balance on accounts, this fee deters spam and prevents people from overloading the system. This [base fee](../glossary/fees.mdx) is very small — 100 stroops per operation where a stroop equals 1 \* 10 ^-7 XLM — and it's charged for each operation in a transaction. A transaction with two operations, for instance, would cost 200 stroops.
+
+<Alert>
+
+In the following code samples, proper error checking is omitted for brevity. However, you should *always* validate your results, as there are many ways that requests can fail. You should refer to the guide on [Handling Errors Gracefully](../tutorials/handling-errors.mdx) for tips on error management strategies.
+
+</Alert>
+
 
 ## Send a Payment
 
@@ -84,7 +92,6 @@ server
 ```
 
 ```java
-Network.useTestNetwork();
 Server server = new Server("https://horizon-testnet.stellar.org");
 
 KeyPair source = KeyPair.fromSecretSeed("SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4");
@@ -94,19 +101,21 @@ KeyPair destination = KeyPair.fromAccountId("GA2C5RFPE6GCKMY3US5PAB6UZLKIGSPIUKS
 // You could skip this, but if the account does not exist, you will be charged
 // the transaction fee when the transaction fails.
 // It will throw HttpResponseException if account does not exist or there was another error.
-server.accounts().account(destination);
+server.accounts().account(destination.getAccountId());
 
 // If there was no error, load up-to-date information on your account.
-AccountResponse sourceAccount = server.accounts().account(source);
+AccountResponse sourceAccount = server.accounts().account(source.getAccountId());
 
 // Start building the transaction.
-Transaction transaction = new Transaction.Builder(sourceAccount)
-        .addOperation(new PaymentOperation.Builder(destination, new AssetTypeNative(), "10").build())
+Transaction transaction = new Transaction.Builder(sourceAccount, Network.TESTNET)
+        .addOperation(new PaymentOperation.Builder(destination.getAccountId(), new AssetTypeNative(), "10").build())
         // A memo allows you to add your own metadata to a transaction. It's
         // optional and does not affect how Stellar treats the transaction.
         .addMemo(Memo.text("Test Transaction"))
         // Wait a maximum of three minutes for the transaction
         .setTimeout(180)
+        // Set the amount of lumens you're willing to pay per operation to submit your transaction
+        .setBaseFee(Transaction.MIN_BASE_FEE)
         .build();
 // Sign the transaction to prove you are actually the person sending it.
 transaction.sign(source);
@@ -129,28 +138,48 @@ try {
 package main
 
 import (
-    "github.com/stellar/go/build"
-    "github.com/stellar/go/clients/horizon"
+    "github.com/stellar/go/keypair"
+    "github.com/stellar/go/network"
+    "github.com/stellar/go/txnbuild"
+    "github.com/stellar/go/clients/horizonclient"
     "fmt"
 )
 
 func main () {
     source := "SCZANGBA5YHTNYVVV4C3U252E2B6P6F5T3U6MM63WBSBZATAQI3EBTQ4"
     destination := "GA2C5RFPE6GCKMY3US5PAB6UZLKIGSPIUKSLRB6Q723BM2OARMDUYEJ5"
+    client := horizonclient.DefaultTestNetClient
 
     // Make sure destination account exists
-    if _, err := horizon.DefaultTestNetClient.LoadAccount(destination); err != nil {
+    destAccountRequest := horizonclient.AccountRequest{AccountID: destination}
+    destinationAccount, err := client.AccountDetail(destAccountRequest)
+    if err != nil {
         panic(err)
     }
 
-    tx, err := build.Transaction(
-        build.TestNetwork,
-        build.SourceAccount{source},
-        build.AutoSequence{horizon.DefaultTestNetClient},
-        build.Payment(
-            build.Destination{destination},
-            build.NativeAmount{"10"},
-        ),
+    // Load the source account
+    sourceKP := keypair.MustParseFull(source)
+    sourceAccountRequest := horizonclient.AccountRequest{AccountID: sourceKP.Address()}
+    sourceAccount, err := client.AccountDetail(sourceAccountRequest)
+    if err != nil {
+        panic(err)
+    }
+
+    // Build transaction
+    tx, err := txnbuild.NewTransaction(
+      txnbuild.TransactionParams{
+        SourceAccount:        &sourceAccount,
+        IncrementSequenceNum: true,
+        BaseFee:              txnbuild.MinBaseFee,
+        Timebounds:           txnbuild.NewInfiniteTimeout(), // Use a real timeout in production!
+        Operations: []txnbuild.Operation{
+          &txnbuild.Payment{
+            Destination: destination,
+            Amount:      "10",
+            Asset:       txnbuild.NativeAsset{},
+          },
+        },
+      },
     )
 
     if err != nil {
@@ -158,18 +187,13 @@ func main () {
     }
 
     // Sign the transaction to prove you are actually the person sending it.
-    txe, err := tx.Sign(source)
-    if err != nil {
-        panic(err)
-    }
-
-    txeB64, err := txe.Base64()
+    tx, err = tx.Sign(network.TestNetworkPassphrase, sourceKP)
     if err != nil {
         panic(err)
     }
 
     // And finally, send it off to Stellar!
-    resp, err := horizon.DefaultTestNetClient.SubmitTransaction(txeB64)
+    resp, err := horizonclient.DefaultTestNetClient.SubmitTransaction(tx)
     if err != nil {
         panic(err)
     }
@@ -181,10 +205,7 @@ func main () {
 ```
 
 ```python
-from stellar_sdk.keypair import Keypair
-from stellar_sdk.network import Network
-from stellar_sdk.server import Server
-from stellar_sdk.transaction_builder import TransactionBuilder
+from stellar_sdk import Asset, Keypair, Network, Server, TransactionBuilder
 from stellar_sdk.exceptions import NotFoundError, BadResponseError, BadRequestError
 
 server = Server("https://horizon-testnet.stellar.org")
@@ -215,7 +236,7 @@ transaction = (
     )
         # Because Stellar allows transaction in many currencies, you must specify the asset type.
         # Here we are sending Lumens.
-        .append_payment_op(destination=destination_id, amount="10", asset_code="XLM")
+        .append_payment_op(destination=destination_id, asset=Asset.native(), amount="10")
         # A memo allows you to add your own metadata to a transaction. It's
         # optional and does not affect how Stellar treats the transaction.
         .add_text_memo("Test Transaction")
@@ -250,13 +271,15 @@ server.loadAccount(destinationId).then(function (account) {
 ```
 
 ```java
-server.accounts().account(destination);
+server.accounts().account(destination.getAccountId());
 ```
 
 ```go
-    if _, err := horizon.DefaultTestNetClient.LoadAccount(destination); err != nil {
-        panic(err)
-    }
+destAccountRequest := horizonclient.AccountRequest{AccountID: destination}
+destinationAccount, err := client.AccountDetail(destAccountRequest)
+if err != nil {
+    panic(err)
+}
 ```
 
 ```python
@@ -276,7 +299,16 @@ return server.loadAccount(sourceKeys.publicKey());
 ```
 
 ```java
-AccountResponse sourceAccount = server.accounts().account(source);
+AccountResponse sourceAccount = server.accounts().account(source.getAccountId());
+```
+
+```go
+sourceKP := keypair.MustParseFull(source)
+sourceAccountRequest := horizonclient.AccountRequest{AccountID: sourceKP.Address()}
+sourceAccount, err := client.AccountDetail(sourceAccountRequest)
+if err != nil {
+  panic(err)
+}
 ```
 
 ```python
@@ -296,13 +328,23 @@ var transaction = new StellarSdk.TransactionBuilder(sourceAccount);
 ```
 
 ```java
-Transaction transaction = new Transaction.Builder(sourceAccount)
+Transaction transaction = new Transaction.Builder(sourceAccount, Network.TESTNET)
 ```
 
 ```go
-    tx, err := build.Transaction(
-    // ...
-    )
+tx, err := txnbuild.NewTransaction(
+  txnbuild.TransactionParams{
+    SourceAccount:        &sourceAccount,
+    IncrementSequenceNum: true,
+    BaseFee:              MinBaseFee,
+    Timebounds:           txnbuild.NewInfiniteTimeout(), // Use a real timeout in production!
+    ...
+  },
+)
+
+if err != nil {
+    panic(err)
+}
 ```
 
 ```python
@@ -328,24 +370,21 @@ transaction = TransactionBuilder(
 ```
 
 ```java
-.addOperation(new PaymentOperation.Builder(destination, new AssetTypeNative(), "10").build())
+.addOperation(new PaymentOperation.Builder(destination.getAccountId(), new AssetTypeNative(), "10").build())
 ```
 
 ```go
-tx, err := build.Transaction(
-    build.TestNetwork,
-    build.SourceAccount{source},
-    build.AutoSequence{horizon.DefaultTestNetClient},
-    build.MemoText{"Test Transaction"},
-    build.Payment(
-        build.Destination{destination},
-        build.NativeAmount{"10"},
-    ),
-)
+Operations: []txnbuild.Operation{
+    &txnbuild.Payment{
+      Destination: destination,
+      Amount:      "10",
+      Asset:       txnbuild.NativeAsset{},
+    },
+  },
 ```
 
 ```python
-.append_payment_op(destination=destination_id, amount="10", asset_code="XLM")
+.append_payment_op(destination=destination_id, asset=Asset.native(), amount="10")
 ```
 
 </CodeExample>
@@ -365,7 +404,7 @@ You should also note that the amount is a string rather than a number. When work
 ```
 
 ```go
-build.MemoText{"Test Transaction"},
+Memo: txnbuild.MemoText("Test Transaction")
 ```
 
 ```python
@@ -387,8 +426,10 @@ transaction.sign(source);
 ```
 
 ```go
-txe, err := tx.Sign(source)
-txeB64, err := txe.Base64()
+tx, err = tx.Sign(network.TestNetworkPassphrase, sourceKP)
+if err != nil {
+    panic(err)
+}
 ```
 
 ```python
@@ -410,7 +451,10 @@ server.submitTransaction(transaction);
 ```
 
 ```go
-resp, err := horizon.DefaultTestNetClient.SubmitTransaction(txeB64)
+resp, err := horizonclient.DefaultTestNetClient.SubmitTransaction(tx)
+if err != nil {
+    panic(err)
+}
 ```
 
 ```python
@@ -419,7 +463,7 @@ server.submit_transaction(transaction)
 
 </CodeExample>
 
-In this example, we're submitting the transaction to the SDF-maintained public testnet instance of Horizon, the Stellar API. When submitting transactions to a Horizon server — which is what most people do — it's possible that you will not receive a response from due to a bug, network conditions, etc. In such a situation it's impossible to determine the status of your transaction. That's why you should always save a built transaction (or transaction encoded in XDR format) in a variable or a database and resubmit it if you don't know its status. If the transaction has already been successfully applied to the ledger, Horizon will simply return the saved result and not attempt to submit the transaction again. Only in cases where a transaction’s status is unknown (and thus will have a chance of being included into a ledger) will a resubmission to the network occur.
+In this example, we're submitting the transaction to the SDF-maintained public testnet instance of Horizon, the Stellar API. When submitting transactions to a Horizon server — which is what most people do — it's possible that you will not receive a response from the server due to a bug, network conditions, etc. In such a situation it's impossible to determine the status of your transaction. That's why you should always save a built transaction (or transaction encoded in XDR format) in a variable or a database and resubmit it if you don't know its status. If the transaction has already been successfully applied to the ledger, Horizon will simply return the saved result and not attempt to submit the transaction again. Only in cases where a transaction’s status is unknown (and thus will have a chance of being included into a ledger) will a resubmission to the network occur.
 
 ## Receive a Payment
 
@@ -490,7 +534,7 @@ Server server = new Server("https://horizon-testnet.stellar.org");
 KeyPair account = KeyPair.fromAccountId("GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF");
 
 // Create an API call to query payments involving the account.
-PaymentsRequestBuilder paymentsRequest = server.payments().forAccount(account);
+PaymentsRequestBuilder paymentsRequest = server.payments().forAccount(account.getAccountId());
 
 // If some payments have already been handled, start the results from the
 // last seen payment. (See below in `handlePayment` where it gets saved.)
@@ -510,7 +554,7 @@ paymentsRequest.stream(new EventListener<OperationResponse>() {
     // The payments stream includes both sent and received payments. We only
     // want to process received payments here.
     if (payment instanceof PaymentOperationResponse) {
-      if (((PaymentOperationResponse) payment).getTo().equals(account)) {
+      if (!((PaymentOperationResponse) payment).getTo().equals(account.getAccountId()) {
         return;
       }
 
@@ -524,7 +568,7 @@ paymentsRequest.stream(new EventListener<OperationResponse>() {
         StringBuilder assetNameBuilder = new StringBuilder();
         assetNameBuilder.append(((AssetTypeCreditAlphaNum) asset).getCode());
         assetNameBuilder.append(":");
-        assetNameBuilder.append(((AssetTypeCreditAlphaNum) asset).getIssuer().getAccountId());
+        assetNameBuilder.append(((AssetTypeCreditAlphaNum) asset).getIssuer());
         assetName = assetNameBuilder.toString();
       }
 
@@ -533,10 +577,14 @@ paymentsRequest.stream(new EventListener<OperationResponse>() {
       output.append(" ");
       output.append(assetName);
       output.append(" from ");
-      output.append(((PaymentOperationResponse) payment).getFrom().getAccountId());
+      output.append(((PaymentOperationResponse) payment).getFrom());
       System.out.println(output.toString());
     }
-
+  }
+  
+  @Override
+  public void onFailure(Optional<Throwable> optional, Optional<Integer> optional1) {
+  
   }
 });
 ```
@@ -547,39 +595,33 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/stellar/go/clients/horizon"
+    "github.com/stellar/go/clients/horizonclient"
 )
 
 func main() {
-    const address = "GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF"
-    ctx := context.Background()
+    client := horizonclient.DefaultTestNetClient
+    opRequest := horizonclient.OperationRequest{ForAccount: "GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF", Cursor: "now"}
 
-    cursor := horizon.Cursor("now")
+    ctx, cancel := context.WithCancel(context.Background())
+    go func() {
+        // Stop streaming after 60 seconds.
+        time.Sleep(60 * time.Second)
+        cancel()
+    }()
 
-    fmt.Println("Waiting for a payment...")
-
-    err := horizon.DefaultTestNetClient.StreamPayments(ctx, address, &cursor, func(payment horizon.Payment) {
-        fmt.Println("Payment type", payment.Type)
-        fmt.Println("Payment Paging Token", payment.PagingToken)
-        fmt.Println("Payment From", payment.From)
-        fmt.Println("Payment To", payment.To)
-        fmt.Println("Payment Asset Type", payment.AssetType)
-        fmt.Println("Payment Asset Code", payment.AssetCode)
-        fmt.Println("Payment Asset Issuer", payment.AssetIssuer)
-        fmt.Println("Payment Amount", payment.Amount)
-        fmt.Println("Payment Memo Type", payment.Memo.Type)
-        fmt.Println("Payment Memo", payment.Memo.Value)
-    })
-
+    printHandler := func(op operations.Operation) {
+        fmt.Println(op)
+    }
+    err := client.StreamPayments(ctx, opRequest, printHandler)
     if err != nil {
-        panic(err)
+        fmt.Println(err)
     }
 
 }
 ```
 
 ```python
-from stellar_sdk.server import Server
+from stellar_sdk import Server
 
 def load_last_paging_token():
     # Get the last paging token from a local database or file
@@ -641,11 +683,16 @@ if (lastToken) {
 ```
 
 ```java
-PaymentsRequestBuilder paymentsRequest = server.payments().forAccount(account)
+PaymentsRequestBuilder paymentsRequest = server.payments().forAccount(account.getAccountId());
 String lastToken = loadLastPagingToken();
 if (lastToken != null) {
   paymentsRequest.cursor(lastToken);
 }
+```
+
+```go
+client := horizonclient.DefaultTestNetClient
+opRequest := horizonclient.OperationRequest{ForAccount: "GC2BKLYOOYPDEFJKLKY6FNNRQMGFLVHJKQRGNSSRRGSMPGF32LHCQVGF", Cursor: "now"}
 ```
 
 ```python
@@ -678,6 +725,23 @@ paymentsRequest.stream(new EventListener<OperationResponse>() {
     // Handle a payment
   }
 });
+```
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+go func() {
+    // Stop streaming after 60 seconds.
+    time.Sleep(60 * time.Second)
+    cancel()
+}()
+
+printHandler := func(op operations.Operation) {
+    fmt.Println(op)
+}
+err := client.StreamPayments(ctx, opRequest, printHandler)
+if err != nil {
+    fmt.Println(err)
+}
 ```
 
 ```python
@@ -721,4 +785,4 @@ payments_next = payments.next()
 
 One of the amazing things about the Stellar network is that you can create, hold, send, receive, and trade any type of asset. Many organizations issue assets on Stellar that represent real-world currencies such as US dollars or Nigerian naira or other cryptocurrencies such as bitcoin or ether.
 
-Each of these redeemable assets — _anchored_ in the Stellar vernacular — is essentially a credit issued by a particular account that represents reserves those accounts hold outside the network. That's why the assets in the example above had both a `code` and an `issuer`: the `issuer` is the public key of the account that created the asset, an account owned by the organization that ultimately honors the credit that asset represents. To find out more about how that works, check out [Enable Deposits and Withdrawals](../enabling-deposit-and-withdrawal/index.mdx).
+Each of these redeemable assets — _anchored_ in the Stellar vernacular — is essentially a credit issued by a particular account that represents reserves those accounts hold outside the network. That's why the assets in the example above had both a `code` and an `issuer`: the `issuer` is the public key of the account that created the asset, an account owned by the organization that ultimately honors the credit that asset represents. To find out more about how that works, check out [Enable Deposits and Withdrawals](../anchoring-assets/enabling-deposit-and-withdrawal/index.mdx).

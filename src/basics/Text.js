@@ -16,6 +16,10 @@ const textStyles = css`
   color: ${({ theme }) => theme.text};
 `;
 
+export const Article = styled.article`
+  position: relative;
+  margin: 0 auto;
+`;
 export const Text = styled.p`
   ${textStyles}
 `;
@@ -50,7 +54,6 @@ export const H1 = styled.h1`
   display: inline-block;
   font-size: 2rem;
   margin-bottom: 0.5rem;
-  margin-top: 5.25rem;
   line-height: 1.25;
   letter-spacing: normal;
 `;
@@ -79,6 +82,8 @@ export const H6 = styled.h6`
 `;
 
 export const LinkedH2 = makeLinkedHeader(H2);
+export const LinkedH3 = makeLinkedHeader(H3);
+export const LinkedH4 = makeLinkedHeader(H4);
 
 export const Quote = styled.blockquote`
   margin: 1rem 0;
@@ -165,6 +170,7 @@ export const ListItem = styled.li`
 export const Small = styled.small`
   font-size: 75%;
 `;
+export const Section = styled.section``;
 export const Table = styled.table`
   display: block;
   word-break: normal;

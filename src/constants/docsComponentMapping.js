@@ -4,10 +4,16 @@ import styled from "styled-components";
 
 import { FONT_WEIGHT, MEDIA_QUERIES, PALETTE } from "constants/styles";
 
+import { makeLinkedHeader } from "helpers/makeLinkedHeader";
+
+import { CheckmarkIcon } from "basics/Icons";
 import { BasicImage } from "basics/Images";
 import { Link } from "basics/Links";
 import { Mermaid } from "basics/Mermaid";
 import * as TextComponents from "basics/Text";
+
+import { WrapperApiReference } from "components/WrapperApiReference";
+import { WrapperDocumentation } from "components/WrapperDocumentation";
 
 const ListItem = (props) => {
   const firstChild = React.Children.toArray(props.children)[0];
@@ -24,7 +30,7 @@ ListItem.propTypes = {
 
 const Div = styled.div``;
 
-export const components = {
+const components = {
   // eslint-disable-next-line react/prop-types
   div: ({ children, className, ...props }) => {
     if (className === "mermaid") {
@@ -62,7 +68,7 @@ export const components = {
       }
     }
   `,
-  h3: styled(TextComponents.H3)`
+  h3: styled(TextComponents.LinkedH3)`
     a {
       color: ${({ theme }) => theme.text};
       @media (${MEDIA_QUERIES.canHover}) {
@@ -72,14 +78,31 @@ export const components = {
       }
     }
   `,
-  h4: TextComponents.H4,
+  h4: styled(TextComponents.LinkedH4)`
+    color: ${PALETTE.darkGrey};
+    font-weight: ${FONT_WEIGHT.medium};
+    font-size: 1.125rem;
+    line-height: 1.5;
+
+    a {
+      color: ${({ theme }) => theme.text};
+      @media (${MEDIA_QUERIES.canHover}) {
+        &:hover {
+          color: ${({ theme }) => theme.darkGrey};
+        }
+      }
+    }
+  `,
   h5: TextComponents.H5,
   h6: TextComponents.H6,
   blockquote: TextComponents.Quote,
   ul: TextComponents.List,
   ol: TextComponents.OrderedList,
   li: ListItem,
-  table: TextComponents.Table,
+  section: TextComponents.Section,
+  table: styled(TextComponents.Table)`
+    margin: 1rem 0;
+  `,
   thead: TextComponents.TableHead,
   th: TextComponents.TableHeadCell,
   tbody: TextComponents.TableBody,
@@ -109,4 +132,69 @@ export const components = {
   script: () => null,
   br: styled.br``,
   small: TextComponents.Small,
+};
+
+/**
+ * Template-specific overrides to these default styles
+ */
+
+const { td: TD } = components;
+
+export const documentationComponents = {
+  ...components,
+  wrapper: WrapperDocumentation,
+  // eslint-disable-next-line react/prop-types
+  td: ({ children }) => {
+    if (children === ":heavy_check_mark:") {
+      return (
+        <TD>
+          <CheckmarkIcon />
+        </TD>
+      );
+    }
+    return <TD>{children}</TD>;
+  },
+};
+
+const headerOptions = {
+  treatIdAsHref: true,
+  LinkComponent: Link,
+};
+
+const ApiRefH1 = styled(TextComponents.H1)`
+  padding-top: 0.25rem;
+  margin-top: 0;
+  margin-bottom: 0;
+`;
+const ApiRefH2 = styled(TextComponents.H2)`
+  padding-top: 0.25rem;
+  margin-top: 0;
+  margin-bottom: 0;
+`;
+const GreenTableCell = styled.td`
+  color: ${PALETTE.lightGreen};
+`;
+const OrangeTableCell = styled.td`
+  color: ${PALETTE.lightOrage};
+`;
+
+export const apiReferenceComponents = {
+  ...components,
+  wrapper: WrapperApiReference,
+  h1: makeLinkedHeader(ApiRefH1, headerOptions),
+  h2: makeLinkedHeader(ApiRefH2, headerOptions),
+  h3: TextComponents.H3,
+  h4: TextComponents.H4,
+  h5: TextComponents.H5,
+  h6: TextComponents.H6,
+  // eslint-disable-next-line react/prop-types
+  td: ({ children }) => {
+    if (children === "GET") {
+      return <GreenTableCell>{children}</GreenTableCell>;
+    }
+    if (children === "POST") {
+      return <OrangeTableCell>{children}</OrangeTableCell>;
+    }
+    return <td>{children}</td>;
+  },
 };

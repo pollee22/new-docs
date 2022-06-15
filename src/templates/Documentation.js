@@ -6,7 +6,7 @@ import { MDXRenderer } from "gatsby-plugin-mdx";
 import { MDXProvider } from "@mdx-js/react";
 
 import { FONT_WEIGHT, THEME, PALETTE } from "constants/styles";
-import { components } from "constants/docsComponentMapping";
+import { documentationComponents } from "constants/docsComponentMapping";
 import { docType } from "constants/docType";
 
 import { slugify } from "helpers/slugify";
@@ -16,40 +16,35 @@ import {
   findInitialOpenTopics,
   findArticle,
   buildDocsContents,
-  consolidateToSection,
 } from "helpers/documentation";
 import { getDescriptionFromAst } from "helpers/mdx";
 import { normalizeRoute } from "helpers/routes";
-import { loopAndExtractString } from "helpers/extractStringChildren";
 
-import { BetaNotice } from "components/BetaNotice";
 import { BasicButton } from "basics/Buttons";
-import { EditIcon, CheckmarkIcon } from "basics/Icons";
+import { EditIcon } from "basics/Icons";
 import { Column, Container, Row } from "basics/Grid";
 import { OriginalFileContext, BasicLink } from "basics/Links";
 import { PrismStyles } from "basics/Prism";
-import { Text } from "basics/Text";
+import { Article, H1, Text } from "basics/Text";
 
-import { LayoutBase } from "components/layout/LayoutBase";
-import {
-  SideNavBody,
-  Provider as SideNavProvider,
-  TrackedContent,
-} from "components/SideNav";
-
-import { SideNavProgressContext } from "components/SideNav/Provider";
-
-import { Content, SideNavColumn } from "components/Documentation/SharedStyles";
+import { BetaNotice } from "components/BetaNotice";
 import { LeftNav } from "components/Documentation/LeftNav";
-import { Footer } from "components/Documentation/Footer";
-import { SideNavBackground, NavLogo } from "components/Navigation/SharedStyles";
+import { Footer } from "components/Footer";
+import { LayoutBase } from "components/layout/LayoutBase";
+import { MobileLeftNav } from "components/Documentation/MobileLeftNav";
+import { SideNavBody, Provider as SideNavProvider } from "components/SideNav";
+import { SideNavProgressContext } from "components/SideNav/Provider";
+import {
+  SideNavBackground,
+  NavLogo,
+  NavColumn,
+} from "components/Navigation/SharedStyles";
+import { Search } from "components/Search";
 
 import Clock from "assets/icons/clock.svg";
 import DevelopersPreview from "assets/images/og_developers.jpg";
-import { MobileLeftNav } from "components/Documentation/MobileLeftNav";
 
 const contentId = "content";
-const { h1: H1, h2: H2, td: TD } = components;
 
 const RightNavEl = styled.div`
   font-size: 0.875rem;
@@ -70,7 +65,7 @@ const NavItemEl = styled(BasicButton)`
   font-size: 0.875rem;
   font-weight: ${FONT_WEIGHT.normal};
   color: ${(props) => (props.isActive ? THEME.text : THEME.lightGrey)};
-  padding: 0.5rem 0;
+  padding: 0.25rem 0;
   text-align: left;
 
   &:focus {
@@ -82,7 +77,6 @@ const OutlineTitleEl = styled.div`
   font-weight: ${FONT_WEIGHT.bold};
   padding: 0.75rem 0;
 `;
-
 const NextUpEl = styled.div`
   font-weight: ${FONT_WEIGHT.bold};
   font-size: 0.875rem;
@@ -90,8 +84,11 @@ const NextUpEl = styled.div`
   border-radius: 2px;
   background-color: rgba(62, 27, 219, 0.04);
   padding: 1em;
-`;
 
+  a {
+    color: ${PALETTE.purpleBlue};
+  }
+`;
 const ModifiedEl = styled.div`
   color: ${THEME.lightGrey};
   font-size: 0.875rem;
@@ -109,8 +106,6 @@ const ModifiedEl = styled.div`
     margin: 0;
   }
 `;
-
-const SectionEl = styled.section``;
 
 const PageOutlineItem = ({ id, isActive, title }) => {
   const { setActiveNode, setIsNavClicked } = React.useContext(
@@ -132,56 +127,6 @@ const PageOutlineItem = ({ id, isActive, title }) => {
       {title}
     </NavItemEl>
   );
-};
-
-const componentMapping = {
-  ...components,
-  // eslint-disable-next-line react/prop-types
-  wrapper: ({ children }) => {
-    const DocSections = React.Children.toArray(children).reduce(
-      consolidateToSection(),
-      [],
-    );
-
-    return DocSections.map((docSection, index) => (
-      // eslint-disable-next-line react/no-array-index-key
-      <SectionEl key={index}>
-        {docSection.length > 0 ? (
-          <TrackedContent
-            identifier={slugify(
-              loopAndExtractString(docSection[0].props.children),
-            )}
-          >
-            {docSection}
-          </TrackedContent>
-        ) : (
-          docSection
-        )}
-      </SectionEl>
-    ));
-  },
-  // eslint-disable-next-line react/prop-types
-  h2: ({ children }) => {
-    /* For cases when <H2/> has an element besides strings.
-    For example, "Implementing the /info Endpoint" from
-    '/docs/enabling-deposit-and-withdrawal/setting-up-test-server/
-    has a <Code/> to highlight "/info" */
-    const id = slugify(loopAndExtractString(children));
-
-    // eslint-disable-next-line react/prop-types
-    return <H2 id={id}>{children}</H2>;
-  },
-  // eslint-disable-next-line react/prop-types
-  td: ({ children }) => {
-    if (children === ":heavy_check_mark:") {
-      return (
-        <TD>
-          <CheckmarkIcon />
-        </TD>
-      );
-    }
-    return <TD>{children}</TD>;
-  },
 };
 
 const Documentation = ({ data, pageContext, location }) => {
@@ -229,8 +174,9 @@ const Documentation = ({ data, pageContext, location }) => {
   );
   const center = (
     <OriginalFileContext.Provider value={originalFilePath}>
+      <Search />
       <BetaNotice />
-      <Content>
+      <Article>
         <H1>{header}</H1>
         {githubLink && (
           <BasicLink href={githubLink} newTab>
@@ -253,7 +199,7 @@ const Documentation = ({ data, pageContext, location }) => {
             </BasicLink>
           </NextUpEl>
         )}
-      </Content>
+      </Article>
       <Footer />
     </OriginalFileContext.Provider>
   );
@@ -265,7 +211,7 @@ const Documentation = ({ data, pageContext, location }) => {
   );
 
   return (
-    <MDXProvider components={componentMapping}>
+    <MDXProvider components={documentationComponents}>
       <LayoutBase
         title={
           normalizeRoute(location.pathname) === "/docs/"
@@ -286,11 +232,11 @@ const Documentation = ({ data, pageContext, location }) => {
         <SideNavProvider>
           <Container id={contentId}>
             <Row>
-              <SideNavColumn xs={{ hide: true }} sm={3} lg={3}>
+              <NavColumn xs={{ hide: true }} sm={3} lg={3}>
                 <NavLogo pageName={docType.doc} />
                 <SideNavBackground />
                 {left}
-              </SideNavColumn>
+              </NavColumn>
               <Column sm={5} md={7}>
                 {center}
               </Column>

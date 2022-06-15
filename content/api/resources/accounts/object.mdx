@@ -10,6 +10,7 @@ When Horizon returns information about an account, it uses the following format:
 
 <AttributeTable>
 
+
 - ATTRIBUTE
   - DATA TYPE
   - DESCRIPTION
@@ -22,6 +23,12 @@ When Horizon returns information about an account, it uses the following format:
 - sequence
   - number
   - This account's current sequence number. For use when submitting this account's next transaction.
+- sequence_ledger
+  - number
+  - The unsigned 32-bit ledger number of the sequence number's [age](../../../docs/glossary/accounts#sequence-time-and-ledger).
+- sequence_time
+  - string
+  - The unsigned 64-bit UNIX timestamp of the sequence number's [age](../../../docs/glossary/accounts#sequence-time-and-ledger).
 - subentry_count
   - number
   - The number of subentries on this account.
@@ -31,6 +38,15 @@ When Horizon returns information about an account, it uses the following format:
 - last_modified_ledger
   - number
   - The ID of the last ledger that included changes to this account.
+- num_sponsoring
+  - number
+  - The number of reserves sponsored by this account.
+- num_sponsored
+  - number
+  - The number of reserves sponsored for this account.
+- sponsor
+  - string (optional)
+  - The account ID of the sponsor who is paying the reserves for this account.
 - thresholds
   - object
   - Operations have varying levels of access. This field specifies thresholds for different access levels, as well as the weight of the master key.
@@ -55,6 +71,9 @@ When Horizon returns information about an account, it uses the following format:
     - auth_revocable
       - boolean
       - If set to `true`, this account can freeze the balance of a holder of an asset issued by this account.
+    - auth_clawback_enabled
+      - boolean
+      - If set to `true`, trustlines created for assets issued by this account have [clawbacks](../../../docs/glossary/clawback.mdx) enabled.
 - balances
   - object
   - The assets this account holds.
@@ -62,23 +81,26 @@ When Horizon returns information about an account, it uses the following format:
       - string
       - The number of units of an asset held by this account.
     - buying_liabilities
-      - string
+      - string (optional)
       - The sum of all buy offers owned by this account for this asset.
     - selling_liabilities
-      - string
+      - string (optional)
       - The sum of all sell offers owned by this account for this asset.
     - limit
       - number (optional)
       - The maximum amount of this asset that this account is willing to accept. Specified when opening a trustline.
     - asset_type
       - string
-      - Either `native`, `credit_alphanum4`, or `credit_alphanum12`.
+      - Either `native`, `credit_alphanum4`, `credit_alphanum12`, or `liquidity_pool_shares`.
     - asset_code
       - string (optional)
       - The code for this asset.
     - asset_issuer
       - string (optional)
       - The Stellar address of this asset's issuer.
+    - sponsor
+      - string (optional)
+      - The account ID of the sponsor who is paying the reserves for this trustline.
 - signers
   - array of objects
   - The public keys and associated weights that can be used to authorize transactions for this account. Used for multi-sig.
@@ -88,6 +110,9 @@ When Horizon returns information about an account, it uses the following format:
     - weight
       - number
       - The numerical weight of a signer. Used to determine if a transaction meets the `threshold` requirements.
+    - sponsor
+      - string (optional)
+      - The account ID of the sponsor who is paying the reserves for this signer.
     - key
       - string
       - A hash of characters dependent on the signer type.
@@ -109,7 +134,9 @@ When Horizon returns information about an account, it uses the following format:
 
 </AttributeTable>
 
+
 <ExampleResponse>
+
 
 ```json
 {
@@ -153,6 +180,8 @@ When Horizon returns information about an account, it uses the following format:
   "inflation_destination": "GDI73WJ4SX7LOG3XZDJC3KCK6ED6E5NBYK2JUBQSPBCNNWEG3ZN7T75U",
   "home_domain": "tempo.eu.com",
   "last_modified_ledger": 23569316,
+  "num_sponsoring": 0,
+  "num_sponsored": 0,
   "thresholds": {
     "low_threshold": 5,
     "med_threshold": 0,
@@ -161,7 +190,8 @@ When Horizon returns information about an account, it uses the following format:
   "flags": {
     "auth_required": false,
     "auth_revocable": true,
-    "auth_immutable": false
+    "auth_immutable": false,
+    "auth_clawback_enabled": true
   },
   "balances": [
     {
@@ -171,6 +201,7 @@ When Horizon returns information about an account, it uses the following format:
       "selling_liabilities": "0.0000000",
       "last_modified_ledger": 22651481,
       "is_authorized": true,
+      "is_clawback_enabled": false,
       "asset_type": "credit_alphanum4",
       "asset_code": "EURT",
       "asset_issuer": "GAP5LETOV6YIE62YAM56STDANPRDO7ZFDBGSNHJQIYGGKSMOZAHOOS2S"
@@ -182,6 +213,7 @@ When Horizon returns information about an account, it uses the following format:
       "selling_liabilities": "0.0000000",
       "last_modified_ledger": 7877447,
       "is_authorized": false,
+      "is_clawback_enabled": false,
       "asset_type": "credit_alphanum4",
       "asset_code": "PHP",
       "asset_issuer": "GBUQWP3BOUZX34TOND2QV7QQ7K7VJTG6VSE7WMLBTMDJLLAW7YKGU6EP"
@@ -193,6 +225,7 @@ When Horizon returns information about an account, it uses the following format:
       "selling_liabilities": "0.0000000",
       "last_modified_ledger": 20213845,
       "is_authorized": true,
+      "is_clawback_enabled": false,
       "asset_type": "credit_alphanum4",
       "asset_code": "NGN",
       "asset_issuer": "GCC4YLCR7DDWFCIPTROQM7EB2QMFD35XRWEQVIQYJQHVW6VE5MJZXIGW"
@@ -217,3 +250,4 @@ When Horizon returns information about an account, it uses the following format:
 ```
 
 </ExampleResponse>
+

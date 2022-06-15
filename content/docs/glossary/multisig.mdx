@@ -28,7 +28,7 @@ Low Security:
 
 - [Transaction processing](./transactions.mdx)
   - Charging a fee or updating the sequence number for the source account
-- [Allow Trust](../start/list-of-operations.mdx#allow-trust) operation
+- [Allow Trust](../start/list-of-operations.mdx#allow-trust) and [Set Trust Line Flags](../start/list-of-operations.mdx#set-trustline-flags) operations
   - Used to allow people to hold credit from this account without exposing the key that enables sending payments from this account.
 - [Bump Sequence](../start/list-of-operations.mdx#bump-sequence)
   - Modify the account's sequence number directly
@@ -55,6 +55,10 @@ If the weight of the master key is updated to 0, it cannot be used to sign trans
 
 Each additional signer beyond the master key increases the account's [minimum balance](./minimum-balance.mdx).
 
+## Extra Signers
+
+You can require that a transaction have a particular signer that isn't associated with any of the accounts used in the transaction by including it in the [transaction validity precondition](./transactions.mdx#extra-signers). The extra signer applies only to that one transaction.
+
 ## Alternate Signature Types
 
 To enable some advanced smart contract features there are a couple of additional signature types. These signature types also have weights and can be added and removed similarly to normal signature types. But rather than check a cryptographic signature for authorization they have a different method of proving validity to the network.
@@ -63,15 +67,23 @@ To enable some advanced smart contract features there are a couple of additional
 
 It is possible for an account to pre-authorize a particular transaction by adding the hash of the future transaction as a "signer" on the account. To do that you need to prepare the transaction beforehand with proper sequence number. Then you can obtain the hash of this transaction and add it as signer to account.
 
-Signers of this type are automatically removed from the account when a matching transaction is properly applied. In case of error, or when matching transaction is never submitted, the signer remains and must be manually removed using the [Set Options](../start/list-of-operations.mdx#set-options) operation.
+Signers of this type are automatically removed from the account when a matching transaction is applied, regardless of whether the transaction succeeds or fails. In case a matching transaction is never submitted, the signer remains and must be manually removed using the [Set Options](../start/list-of-operations.mdx#set-options) operation.
 
 This type of signer is especially useful in escrow accounts. You can pre-authorize two different transactions. Both could have the same sequence number but different destinations. This means that only one of them can be executed.
 
 ### Hash(x)
 
-Adding a signature of type hash(x) allows anyone who knows `x` to sign the transaction. This type of signer is especially useful in [atomic cross-chain swaps](https://en.bitcoin.it/wiki/Atomic_cross-chain_trading) which are needed for inter-blockchain protocols like [lightning networks](https://lightning.network).
+Adding a signer of type hash(x) allows anyone who knows `x` to sign the transaction. This type of signer is especially useful in [atomic cross-chain swaps](https://en.bitcoin.it/wiki/Atomic_cross-chain_trading) which are needed for inter-blockchain protocols like [lightning networks](https://lightning.network).
 
 First, create a random 256 bit value, which we call `x`. The SHA256 hash of that value can be added as a signer of type hash(x). Then in order to authorize a transaction, `x` is added as one of the signatures of the transaction. Keep in mind that `x` will be known to the world as soon as a transaction is submitted to the network with `x` as a signature. This means anyone will be able to sign for that account with the hash(x) signer at that point. Often you want there to be additional signers so someone must have a particular secret key and know `x` in order to reach the weight threshold required to authorize transactions on the account.
+
+### Signed Payloads
+
+Adding a signed payload as a signer means that transactions are only valid if they are accompanied by a signature of the signer's payload. The signature must be produced using the private key corresponding to the public key specified in the signer.
+
+More verbosely, you add a signer of `(public key, payload)`, where the public key is the Stellar address of the expected signer and the payload is any arbitrary data of up to 64 bytes. A valid signature, then, is a signature on that payload by the private key corresponding to the public key. This is also described in [CAP-40](https://stellar.org/protocol/cap-40) which introduced this new signer.
+
+Like with [hash signers](#hashx), once the signed payload signature is revealed to the world, anyone can use the signature to authorize transactions that are contingent on that signed payload signer.
 
 ## Envelopes
 
@@ -87,11 +99,13 @@ This scheme is very flexible. You can require many signers to authorize payments
 
 ### Example 1: Anchors
 
-> You run an anchor that would like to keep its issuing key offline. That way, it's less likely a bad actor can get ahold of the anchor's key and start issuing credit improperly. However, your anchor needs to authorize people holding credit by running the `Allow Trust` operation. Before you issue credit to an account, you need to verify that account is OK.
+> You run an anchor that would like to keep its issuing key offline. That way, it's less likely a bad actor can get ahold of the anchor's key and start issuing credit improperly. However, your anchor needs to authorize people holding credit by running the [`Set Trust Line Flags` operation](../start/list-of-operations.mdx#set-trustline-flags). Before you issue credit to an account, you need to verify that account is OK.
 
-Multisig allows you to do all of this without exposing the master key of your anchor. You can add another signing key to your account with the operation `Set Options`. This additional key should have a weight below your anchor account's medium threshold. Since `Allow Trust` is a low-threshold operation, this extra key authorizes users to hold your anchor's credit. But, since `Payment` is a medium-threshold operation, this key does not allow anyone who compromises your anchor to issue credit.
+Multisig allows you to do all of this without exposing the master key of your anchor. You can add another signing key to your account with the operation `Set Options`. This additional key should have a weight below your anchor account's medium threshold. Since `Set Trust Line Flags` is a low-threshold operation, this extra key authorizes users to hold your anchor's credit. But, since `Payment` is a medium-threshold operation, this key does not allow anyone who compromises your anchor to issue credit.
 
 Your account setup:
+
+<CodeExample>
 
 ```
   Master Key Weight: 2
@@ -101,11 +115,15 @@ Your account setup:
   High Threshold: 2
 ```
 
+</CodeExample>
+
 ### Example 2: Joint Accounts
 
 > You want to set up a joint account with Bilal and Carina such that any of you can authorize a payment. You also want to set up the account so that, if you choose to change signers (e.g., remove or add someone), a high-threshold operation, all 3 of you must agree. You add Bilal and Carina as signers to the joint account. You also ensure that it takes all of your key weights to clear the high threshold but only one to clear the medium threshold.
 
 Joint account setup:
+
+<CodeExample>
 
 ```
   Master Key Weight: 1
@@ -116,11 +134,15 @@ Joint account setup:
   Carina's Signing Key Weight: 1
 ```
 
+</CodeExample>
+
 ### Example 3: Expense Accounts
 
 > You fully control an expense account, but you want your two coworkers Diyuan and Emil to be able to authorize transactions from this account. You add Diyuan and Emil's signing keys to the expense account. If either Diyuan or Emil leave the company, you can remove their signing key, a high-threshold operation.
 
 Expense account setup:
+
+<CodeExample>
 
 ```
   Master Key Weight: 3
@@ -131,9 +153,11 @@ Expense account setup:
   Emil's Key Weight: 1
 ```
 
+</CodeExample>
+
 <Alert>
 
-The next two examples involve setting the master key weight of an account to 0. Be very, very careful if you decide to do that: that key will no longer be able to sign any kind of transaction, so you are in danger of _permanently_ locking yourself out of your account. Make sure you've thought carefully about what you're doing, and that you understand the implications.
+The next example involves setting the master key weight of an account to 0. Be very, very careful if you decide to do that: that key will no longer be able to sign any kind of transaction, so you are in danger of _permanently_ locking yourself out of your account. Make sure you've thought carefully about what you're doing, that you understand the implications, and that you change weights in the correct order.
 
 </Alert>
 
@@ -143,8 +167,10 @@ The next two examples involve setting the master key weight of an account to 0. 
 
 Company account setup:
 
+<CodeExample>
+
 ```
-  Master Key Weight: 0 (Turned off so this account can't do anything without an employee)
+  Master Key Weight: 0 (Turned off so this account can't do anything without an employee.)
   Low Threshold: 3
   Medium Threshold: 3
   High Threshold: 3
@@ -156,17 +182,4 @@ Company account setup:
   Employee 6 Key Weight: 1
 ```
 
-### Example 5: Custom Currencies
-
-> You want to issue a custom currency and ensure that no more will ever be created. You make a source account and issue the maximum amount of currency to a holding account. Then you set the master weight of the source account to below the medium threshold--the source account can no longer issue currency.
-
-Source account setup:
-
-```
-  Master Key Weight: 0
-  Low Threshold: 0
-  Medium Threshold: 0
-  High Threshold: 0
-```
-
-Note that even though the thresholds are 0 here, the master key cannot successfully sign a transaction because its own weight is 0.
+</CodeExample>
